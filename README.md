@@ -1,4 +1,4 @@
-# process-scheduler-simulator
+# Process Scheduler Simulator
 Final project of the Operating Systems discipline at the Federal University of Bahia - UFBA
 
 **PHASE 1)** Consider an operating system that implements process scheduling. The expected operation is that this environment has N processes that can arrive at different times for execution. For each process, the following must be manually informed:
