@@ -230,9 +230,11 @@ export default function Home() {
               </div>
             </div>
             
-            <MemoryManager 
+            <VirtualMemoryManager 
               process={processo}
               onPageAllocation={handlePageAllocation}
+              totalRAM={TOTAL_MEMORY}
+              pageSize={PAGE_SIZE}
             />
           </div>
         ))}

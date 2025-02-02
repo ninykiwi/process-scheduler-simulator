@@ -1,0 +1,19 @@
+{
+  "name": "process-scheduler-simulator",
+  "version": "1.0.0",
+  "description": "Final project of the Operating Systems discipline at the Federal University of Bahia - UFBA",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ninykiwi/process-scheduler-simulator.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ninykiwi/process-scheduler-simulator/issues"
+  },
+  "homepage": "https://github.com/ninykiwi/process-scheduler-simulator#readme"
+}
