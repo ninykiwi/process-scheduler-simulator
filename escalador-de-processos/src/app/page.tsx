@@ -25,15 +25,26 @@ const TableContainer = styled.div`
   overflow-y: auto; 
 `;
 
+type MemoryPage = {
+  id: number;
+  size: number;
+  inMemory: boolean;
+};
 
 type Processo = {
   chegada: number;
   duracao: number;
   deadline: number;
   codigo: number;
-
-
+  pages: MemoryPage[];
+  totalMemory: number;
 }
+
+const PAGE_SIZE = 4;
+const MAX_PAGES = 10;
+const TOTAL_MEMORY = 200;
+const ITEMS_PER_PAGE = 5;
+
 export default function Home() {
   const [numeroDoProcesso, setNumeroDoProcesso] = useState(1);
   const [chegada, setChegada] = useState("");
@@ -43,19 +54,90 @@ export default function Home() {
   const [sobrecarga, setSobrecarga] = useState('');
   const [tabelaProcessos, setTabelaProcessos] = useState<Processo[]>([]);
   const [selecionarEscalonamento, setSelecionarEscalonamento] = useState<string | null>(null);
+  const [totalUsedMemory, setTotalUsedMemory] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
 
   function handleCreateProcess(chegada: string, duracao: string, deadline: string) {
+    const initialPage: MemoryPage = {
+      id: 0,
+      size: PAGE_SIZE,
+      inMemory: totalUsedMemory + PAGE_SIZE <= TOTAL_MEMORY
+    };
+
     const newProcesso: Processo = {
       chegada: Number(chegada),
       duracao: Number(duracao),
       deadline: Number(deadline),
-      codigo: numeroDoProcesso
+      codigo: numeroDoProcesso,
+      pages: [initialPage],
+      totalMemory: PAGE_SIZE
     };
 
+    if (initialPage.inMemory) {
+      setTotalUsedMemory(prev => prev + PAGE_SIZE);
+    }
 
     setTabelaProcessos((prevTabelaProcessos) => [...prevTabelaProcessos, newProcesso]);
     setNumeroDoProcesso((prevNumero) => prevNumero + 1);
-  }
+
+    const handleAddPage = (processId: number) => {
+      setTabelaProcessos(prevProcessos => {
+        return prevProcessos.map(processo => {
+          if (processo.codigo === processId) {
+            if (processo.pages.length >= MAX_PAGES) {
+              setErrorMessage(`Limite máximo de páginas atingido para o processo ${processId}`);
+              return processo;
+            }
+  
+            const canAllocateMemory = totalUsedMemory + PAGE_SIZE <= TOTAL_MEMORY;
+            const newPage: MemoryPage = {
+              id: processo.pages.length,
+              size: PAGE_SIZE,
+              inMemory: canAllocateMemory
+            };
+  
+            if (canAllocateMemory) {
+              setTotalUsedMemory(prev => prev + PAGE_SIZE);
+            }
+  
+            return {
+              ...processo,
+              pages: [...processo.pages, newPage],
+              totalMemory: processo.totalMemory + PAGE_SIZE
+            };
+          }
+          return processo;
+        });
+      });
+    }
+
+    const handlePageAllocation = (processId: number, pageId: number) => {
+      if (totalUsedMemory + PAGE_SIZE > TOTAL_MEMORY) {
+        setErrorMessage('Memória RAM insuficiente para alocar nova página');
+        return;
+      }
+  
+      setTabelaProcessos(prevProcessos => {
+        return prevProcessos.map(processo => {
+          if (processo.codigo === processId) {
+            const updatedPages = processo.pages.map(page => {
+              if (page.id === pageId) {
+                const newInMemory = !page.inMemory;
+                if (newInMemory && totalUsedMemory + PAGE_SIZE <= TOTAL_MEMORY) {
+                  setTotalUsedMemory(prev => prev + PAGE_SIZE);
+                  return { ...page, inMemory: true };
+                } else if (!newInMemory) {
+                  setTotalUsedMemory(prev => prev - PAGE_SIZE);
+                  return { ...page, inMemory: false };
+                }
+              }
+              return page;
+            });
+            return { ...processo, pages: updatedPages };
+          }
+          return processo;
+        });
+      });
 
   const excluirProcesso = (codigo: number) => {
     setTabelaProcessos((prevTabelaProcessos) =>
@@ -100,6 +182,81 @@ export default function Home() {
         </TableContainer>
 
       </div>
+       {/* Barra de status de memória geral */}
+       <div className="bg-white p-4 rounded-lg shadow-md">
+        <h3 className="text-lg font-bold mb-4">Status da Memória</h3>
+        <div className="flex flex-col gap-2">
+          <div className="flex justify-between text-sm">
+            <span>RAM Total: {TOTAL_MEMORY}KB</span>
+            <span>Em Uso: {totalUsedMemory}KB</span>
+            <span>Disponível: {TOTAL_MEMORY - totalUsedMemory}KB</span>
+          </div>
+          <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-blue-500 transition-all"
+              style={{ width: `${(totalUsedMemory / TOTAL_MEMORY) * 100}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de processos */}
+      <div className="space-y-4">
+        {currentProcessos.map((processo) => (
+          <div key={processo.codigo} className="bg-white p-4 rounded-lg shadow-md">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex gap-4">
+                <span className="font-bold">Processo {processo.codigo}</span>
+                <span>Chegada: {processo.chegada}</span>
+                <span>Duração: {processo.duracao}</span>
+                <span>Deadline: {processo.deadline || 0}</span>
+              </div>
+              
+              <div className="flex gap-2">
+                {processo.pages.length < MAX_PAGES && (
+                  <button
+                    onClick={() => handleAddPage(processo.codigo)}
+                    className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                  >
+                    Adicionar Página
+                  </button>
+                )}
+                <button
+                  onClick={() => excluirProcesso(processo.codigo)}
+                  className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors"
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
+            
+            <VirtualMemoryManager 
+              process={processo}
+              onPageAllocation={handlePageAllocation}
+              totalRAM={TOTAL_MEMORY}
+              pageSize={PAGE_SIZE}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Mensagem de erro (se houver) */}
+      {errorMessage && (
+        <div 
+          className="fixed bottom-4 right-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md shadow-md"
+          onClick={() => setErrorMessage('')}
+        >
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Paginação */}
+      <Pagination
+        itemsPerPage={ITEMS_PER_PAGE}
+        totalItems={tabelaProcessos.length}
+        currentPage={currentPage}
+        onPageChange={handlePageChange}
+      />
     </main>
   );
 }
