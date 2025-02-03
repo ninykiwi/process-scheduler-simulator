@@ -2,16 +2,18 @@ import { useState } from "react";
 
 type Props = {
   numeroDoProcesso: number;
-  onClick: (chegada: string, duracao: string, deadline: string) => void;
+  onClick: (chegada: string, duracao: string, deadline: string, pagina: string) => void;
 };
 
 const Modal = ({ numeroDoProcesso, onClick: criarProcesso }: Props) => {
   const [chegada, setChegada] = useState("");
   const [duracao, setDuracao] = useState("");
   const [deadline, setDeadline] = useState("");
+  const [pagina, setPagina] = useState("");
+
 
   const handleClick = () => {
-    criarProcesso(chegada, duracao, deadline);
+    criarProcesso(chegada, duracao, deadline, pagina);
   };
 
   return (
@@ -51,6 +53,18 @@ const Modal = ({ numeroDoProcesso, onClick: criarProcesso }: Props) => {
             placeholder="0"
             value={deadline}
             onChange={(e) => setDeadline(e.target.value)}
+            min={0}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="pagina" className="font-bold">Páginas</label>
+          <input
+            type="number"
+            id="pagina"
+            className="py-2 pl-3 pr-2 rounded-lg bg-slate-300"
+            placeholder="0"
+            value={pagina}
+            onChange={(e) => setPagina(e.target.value)}
             min={0}
           />
         </div>

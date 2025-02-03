@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 type Processo = {
     chegada: number;
@@ -38,7 +38,6 @@ const SJF = ({ linhas, tabela }: Props) => {
             const processo = sortedTabela.shift();
             if (processo === undefined) {
                 continue
-                
             }
             const startRow = processo.originalIndex!;
             const startCol = Math.max(processo.chegada, processoTerminou);
@@ -65,19 +64,6 @@ const SJF = ({ linhas, tabela }: Props) => {
             });
         }
 
-        for (let row = 0; row < NUM_LINHAS; row++) {
-            for (let col = 0; col < numColunas; col++) {
-                const status = statusGrid[row][col];
-                items.push(
-                    <div
-                        key={`${row}-${col}`}
-                        className={`flex items-center justify-center border border-black border-opacity-40 w-10 h-10 ${status === 'green' ? 'bg-green-500' : (status === 'yellow' ? 'bg-yellow-400' : 'bg-white')}`}
-                    >
-                    </div>
-                );
-            }
-        }
-
         return { items, numColunas, statusGrid };
     };
 
@@ -100,6 +86,31 @@ const SJF = ({ linhas, tabela }: Props) => {
     const turnaroundTime = calculateTurnaroundTime();
 
     const [isDetailVisible, setIsDetailVisible] = useState(false);
+    const [currentStatusGrid, setCurrentStatusGrid] = useState<string[][]>(Array(NUM_LINHAS).fill(null).map(() => []));
+    const [currentColumn, setCurrentColumn] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (currentColumn < numColunas) {
+                const newStatusGrid = currentStatusGrid.map((row, rowIndex) => {
+                    return rowIndex < NUM_LINHAS ? [...row] : row;
+                });
+
+                for (let row = 0; row < NUM_LINHAS; row++) {
+                    if (statusGrid[row][currentColumn]) {
+                        newStatusGrid[row][currentColumn] = statusGrid[row][currentColumn];
+                    }
+                }
+
+                setCurrentStatusGrid(newStatusGrid);
+                setCurrentColumn((prevColumn) => prevColumn + 1);
+            } else {
+                clearInterval(interval);
+            }
+        }, 500);
+
+        return () => clearInterval(interval);
+    }, [currentColumn, currentStatusGrid]);
 
     function handleDetailVisibility() {
         setIsDetailVisible(!isDetailVisible);
@@ -107,11 +118,14 @@ const SJF = ({ linhas, tabela }: Props) => {
 
     return (
         <div className="flex flex-col items-center bg-gray-100 p-4 rounded-3xl">
-            <button onClick={handleDetailVisibility} className='text-blue-800 font-semibold py-1 px-3 mb-4 rounded-lg'>{isDetailVisible ? "Esconder detalhes" : "Mostrar detalhes"}</button>
+            <button onClick={handleDetailVisibility} className='text-blue-800 font-semibold py-1 px-3 mb-4 rounded-lg'>
+                {isDetailVisible ? "Esconder detalhes" : "Mostrar detalhes"}
+            </button>
+
             {isDetailVisible ? (
                 <div className="mb-4 -mt-2">
                     <h3 className="text-lg font-extrabold mt-2 mb-2">Tabela de Processos Ordenada:</h3>
-                    <ul className=''>
+                    <ul>
                         {originalIndex.map(processo => (
                             <li key={processo.codigo} className="flex gap-3 mb-2">
                                 <span>{`Código: ${processo.codigo}`}</span>
@@ -132,7 +146,17 @@ const SJF = ({ linhas, tabela }: Props) => {
                     gridTemplateRows: `repeat(${NUM_LINHAS}, 1fr)`,
                 }}
             >
-                {items}
+                {Array.from({ length: NUM_LINHAS }).map((_, row) => 
+                    Array.from({ length: numColunas }).map((_, col) => {
+                        const status = currentStatusGrid[row][col];
+                        return (
+                            <div
+                                key={`${row}-${col}`}
+                                className={`flex items-center justify-center border border-black border-opacity-40 w-10 h-10 ${status === 'green' ? 'bg-green-500' : (status === 'yellow' ? 'bg-yellow-400' : 'bg-white')}`}
+                            />
+                        );
+                    })
+                )}
             </div>
 
             <div className="mt-8">

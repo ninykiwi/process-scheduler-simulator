@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 type Processo = {
-    [x: string]: any;
     chegada: number;
     duracao: number;
     deadline: number;
     codigo: number;
+    originalIndex?: number;
+    processoDeadline?: number;
+    salvarDuracao?: number;
 };
 
 type Props = {
@@ -70,7 +72,7 @@ const EDF = ({ linhas, tabela, sobrecarga, quantum }: Props) => {
             }
 
             if (processoAtual) {
-                const startRow = processoAtual.originalIndex;
+                const startRow = processoAtual.originalIndex!;
                 const startCol = Math.max(processoAtual.chegada, processoTerminou);
                 const processoDeadline = processoAtual.processoDeadline!;
                 const tempoExecucao = Math.min(processoAtual.duracao, quantum);
@@ -118,30 +120,43 @@ const EDF = ({ linhas, tabela, sobrecarga, quantum }: Props) => {
             }
         }
 
-        for (let row = 0; row < NUM_LINHAS; row++) {
-            for (let col = 0; col < numColunas; col++) {
-                const status = statusGrid[row][col];
-                items.push(
-                    <div
-                        key={`${row}-${col}`}
-                        className={`flex items-center justify-center border border-black border-opacity-40 w-10 h-10 ${status === 'green' ? 'bg-green-500' : (status === 'yellow' ? 'bg-yellow-500' : (status === 'red' ? 'bg-red-500' : (status === 'black' ? 'bg-black' : 'bg-white')))}`}
-                    >
-                    </div>
-                );
-            }
-        }
-
         return { items, numColunas, statusGrid };
     };
 
     const { items, numColunas, statusGrid } = createGridItems();
+
+    const [currentStatusGrid, setCurrentStatusGrid] = useState<string[][]>(Array(NUM_LINHAS).fill(null).map(() => []));
+    const [currentColumn, setCurrentColumn] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (currentColumn < numColunas) {
+                const newStatusGrid = currentStatusGrid.map((row, rowIndex) => {
+                    return rowIndex < NUM_LINHAS ? [...row] : row;
+                });
+
+                for (let row = 0; row < NUM_LINHAS; row++) {
+                    if (statusGrid[row][currentColumn]) {
+                        newStatusGrid[row][currentColumn] = statusGrid[row][currentColumn];
+                    }
+                }
+
+                setCurrentStatusGrid(newStatusGrid);
+                setCurrentColumn((prevColumn) => prevColumn + 1);
+            } else {
+                clearInterval(interval);
+            }
+        }, 500);
+
+        return () => clearInterval(interval);
+    }, [currentColumn, currentStatusGrid]);
 
     const calculateTurnaroundTime = () => {
         let nonWhiteCells = 0;
 
         for (let row = 0; row < NUM_LINHAS; row++) {
             for (let col = 0; col < numColunas; col++) {
-                if (statusGrid[row][col] !== undefined && statusGrid[row][col] !== 'white') {
+                if (currentStatusGrid[row][col] !== undefined && currentStatusGrid[row][col] !== 'white') {
                     nonWhiteCells++;
                 }
             }
@@ -164,7 +179,9 @@ const EDF = ({ linhas, tabela, sobrecarga, quantum }: Props) => {
 
     return (
         <div className="flex flex-col items-center bg-gray-100 p-4 rounded-3xl">
-            <button onClick={handleDetailVisibility} className='text-blue-800 font-semibold py-1 px-3 mb-4 rounded-lg'>{isDetailVisible ? "Esconder detalhes" : "Mostrar detalhes"}</button>
+            <button onClick={handleDetailVisibility} className='text-blue-800 font-semibold py-1 px-3 mb-4 rounded-lg'>
+                {isDetailVisible ? "Esconder detalhes" : "Mostrar detalhes"}
+            </button>
             {isDetailVisible ? (
                 <div className="mb-4 -mt-2">
                     <h3 className="text-lg font-extrabold mb-2">Tabela de Processos Ordenada:</h3>
@@ -190,7 +207,20 @@ const EDF = ({ linhas, tabela, sobrecarga, quantum }: Props) => {
                     gridTemplateRows: `repeat(${NUM_LINHAS}, 1fr)`,
                 }}
             >
-                {items}
+                {Array.from({ length: NUM_LINHAS }).map((_, row) => 
+                    Array.from({ length: numColunas }).map((_, col) => {
+                        const status = currentStatusGrid[row][col];
+                        return (
+                            <div
+                                key={`${row}-${col}`}
+                                className={`flex items-center justify-center border border-black border-opacity-40 w-10 h-10 ${status === 'green' ? 'bg-green-500' : 
+                                    (status === 'yellow' ? 'bg-yellow-500' : 
+                                    (status === 'red' ? 'bg-red-500' : 
+                                    (status === 'black' ? 'bg-black' : 'bg-white')))}`}
+                            />
+                        );
+                    })
+                )}
             </div>
 
             <div className="mt-4">

@@ -29,7 +29,7 @@ const Quantum = ({ valorQuantum, valorSobrecarga }: Props) => {
                     type='number'
                     min={1}
                     max={99}
-                    placeholder="2"
+                    placeholder="0"
                     value={quantum}
                     onChange={handleQuantumChange}
                     className='mt-px py-2 pl-3 pr-2 rounded-lg w-24 bg-slate-300 font-normal'
@@ -41,7 +41,7 @@ const Quantum = ({ valorQuantum, valorSobrecarga }: Props) => {
                     type='number'
                     min={1}
                     max={99}
-                    placeholder="1"
+                    placeholder="0"
                     value={sobrecarga}
                     onChange={handleSobrecargaChange}
                     className='mt-px py-2 pl-3 pr-2 rounded-lg w-24 bg-slate-300 font-normal'

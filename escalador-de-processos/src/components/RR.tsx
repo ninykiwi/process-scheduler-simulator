@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 type Processo = {
     [x: string]: any;
@@ -26,13 +26,41 @@ const RR = ({ linhas, tabela, sobrecarga, quantum }: Props) => {
 
     let TOTAL_QUANTUM = tabela.reduce((acumulador, item) => acumulador + item.duracao, 0);
     const statusGrid: string[][] = Array(NUM_LINHAS).fill(null).map(() => []);
-    console.log(statusGrid)
     let processoTerminou = 0;
     let numColunas = 0;
 
     let fila: Processo[] = [...sortedTabela];
     let processoAtual: Processo | null = null;
 
+    // Adicionar variáveis de controle para animação
+    const [currentStatusGrid, setCurrentStatusGrid] = useState<string[][]>(Array(NUM_LINHAS).fill(null).map(() => []));
+    const [currentColumn, setCurrentColumn] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            if (currentColumn < numColunas) {
+                const newStatusGrid = currentStatusGrid.map((row, rowIndex) => {
+                    return rowIndex < NUM_LINHAS ? [...row] : row;
+                });
+
+                // Atualizar statusGrid baseado no tempo de execução
+                for (let row = 0; row < NUM_LINHAS; row++) {
+                    if (statusGrid[row][currentColumn]) {
+                        newStatusGrid[row][currentColumn] = statusGrid[row][currentColumn];
+                    }
+                }
+
+                setCurrentStatusGrid(newStatusGrid);
+                setCurrentColumn((prevColumn) => prevColumn + 1);
+            } else {
+                clearInterval(interval);
+            }
+        }, 500);
+
+        return () => clearInterval(interval);
+    }, [currentColumn, currentStatusGrid]);
+
+    // Algoritmo Round Robin
     while (TOTAL_QUANTUM > 0) {
         if (!processoAtual || processoAtual.duracao <= 0) {
             processoAtual = fila.find(p => p.chegada <= processoTerminou) || null;
@@ -74,18 +102,14 @@ const RR = ({ linhas, tabela, sobrecarga, quantum }: Props) => {
             if (!statusGrid[startRow]) {
                 statusGrid[startRow] = [];
             }
-            else if (statusGrid[startRow][col] !='green' && statusGrid[startRow][col] !='red' && statusGrid[startRow][col] !='black'){
+            else if (statusGrid[startRow][col] != 'green' && statusGrid[startRow][col] != 'red') {
                 statusGrid[startRow][col] = 'yellow';
             }
         }
 
         const proximoProcesso = fila.find(p => p.chegada <= processoTerminou);
         if (processoAtual.duracao > 0 && proximoProcesso) {
-            
-                fila.push(processoAtual)
-
-            
-            
+            fila.push(processoAtual);
             processoAtual = null;
         }
 
@@ -96,7 +120,7 @@ const RR = ({ linhas, tabela, sobrecarga, quantum }: Props) => {
         const items = [];
         for (let row = 0; row < NUM_LINHAS; row++) {
             for (let col = 0; col < numColunas; col++) {
-                const status = statusGrid[row][col];
+                const status = currentStatusGrid[row][col];
                 items.push(
                     <div
                         key={`${row}-${col}`}
