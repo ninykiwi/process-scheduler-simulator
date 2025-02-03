@@ -1,63 +1,113 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
-const PAGE_ACCESS_TIME = 1; // 1 u.t. para acesso a RAM
-const DISK_ACCESS_TIME = 5; // 5 u.t. para acesso ao disco
-const DISK_SIZE = 1000; // 1000KB disponíveis em disco
+const PAGE_ACCESS_TIME = 1; // 1 u.t. for RAM access
+const DISK_ACCESS_TIME = 5; // 5 u.t. for disk access
+const DISK_SIZE = 1000; // 1000KB available on disk
 
-const VirtualMemoryManager = ({ 
-  process, 
-  onPageAllocation, 
+type MemoryPage = {
+  id: number;
+  size: number;
+  inMemory: boolean;
+};
+
+type Process = {
+  codigo: number;
+  pages: MemoryPage[];
+};
+
+type VirtualMemoryManagerProps = {
+  process: Process;
+  onPageAllocation: (processId: number, pageId: number) => void;
+  totalRAM?: number;
+  pageSize?: number;
+  pageReplacementAlgorithm?: 'FIFO' | 'LRU';
+};
+
+const VirtualMemoryManager: React.FC<VirtualMemoryManagerProps> = ({
+  process,
+  onPageAllocation,
   totalRAM = 200,
-  pageSize = 4 
+  pageSize = 4,
+  pageReplacementAlgorithm = 'FIFO', // Default to FIFO
 }) => {
-  const [diskPages, setDiskPages] = useState([]);
-  const [timeMetrics, setTimeMetrics] = useState([]);
+  const [timeMetrics, setTimeMetrics] = useState<Array<{ pageId: number; operation: string; time: number; timestamp: number }>>([]);
   const [currentTime, setCurrentTime] = useState(0);
-  const [usageHistory, setUsageHistory] = useState([]);
+  const [usageHistory, setUsageHistory] = useState<Array<{ time: number; ramUsage: number; diskUsage: number }>>([]);
+  const [lastAccessTimes, setLastAccessTimes] = useState<Map<number, number>>(new Map());
 
-  // Calcular uso atual da RAM e disco
-  const ramUsage = process.pages.reduce((sum, page) => 
-    sum + (page.inMemory ? page.size : 0), 0);
-  
-  const diskUsage = process.pages.reduce((sum, page) => 
-    sum + (!page.inMemory ? page.size : 0), 0);
+  // Calculate current RAM and disk usage
+  const ramUsage = process.pages.reduce((sum, page) => sum + (page.inMemory ? page.size : 0), 0);
+  const diskUsage = process.pages.reduce((sum, page) => sum + (!page.inMemory ? page.size : 0), 0);
 
-  // Atualizar histórico de uso
+  // Update usage history
   useEffect(() => {
-    setUsageHistory(prev => [...prev, {
-      time: currentTime,
-      ramUsage,
-      diskUsage,
-      totalRAM,
-      totalDisk: DISK_SIZE
-    }].slice(-20)); // manter apenas os últimos 20 pontos
-    
-    setCurrentTime(prev => prev + 1);
+    setUsageHistory((prev) => [
+      ...prev,
+      { time: currentTime, ramUsage, diskUsage },
+    ].slice(-20)); // Keep only the last 20 data points
+    setCurrentTime((prev) => prev + 1);
   }, [ramUsage, diskUsage]);
 
-  const handlePageSwap = async (processId, pageId) => {
-    // simular tempo de acesso ao disco se necessário
-    const page = process.pages.find(p => p.id === pageId);
+  // Update last access time for a page
+  const updateLastAccessTime = (pageId: number) => {
+    setLastAccessTimes((prev) => new Map(prev).set(pageId, currentTime));
+  };
+
+  // FIFO page replacement algorithm
+  const replacePageFIFO = (pages: MemoryPage[], newPage: MemoryPage): MemoryPage[] => {
+    const oldestPageIndex = pages.findIndex((page) => page.inMemory);
+    if (oldestPageIndex === -1) return pages; // No pages to replace
+    const updatedPages = [...pages];
+    updatedPages[oldestPageIndex] = { ...newPage, inMemory: true };
+    return updatedPages;
+  };
+
+  // LRU page replacement algorithm
+  const replacePageLRU = (pages: MemoryPage[], newPage: MemoryPage, lastAccessTimes: Map<number, number>): MemoryPage[] => {
+    let lruPageIndex = -1;
+    let lruTime = Infinity;
+
+    pages.forEach((page, index) => {
+      if (page.inMemory && (lastAccessTimes.get(page.id) ?? Infinity) < lruTime) {
+        lruPageIndex = index;
+        lruTime = lastAccessTimes.get(page.id) ?? Infinity;
+      }
+    });
+
+    if (lruPageIndex === -1) return pages; // No pages to replace
+    const updatedPages = [...pages];
+    updatedPages[lruPageIndex] = { ...newPage, inMemory: true };
+    return updatedPages;
+  };
+
+  // Handle page swap (page fault simulation)
+  const handlePageSwap = async (processId: number, pageId: number) => {
+    const page = process.pages.find((p) => p.id === pageId);
+    if (!page) return;
+
+    // Simulate page fault if the page is not in memory
     if (!page.inMemory) {
-      setTimeMetrics(prev => [...prev, {
-        pageId,
-        operation: 'Page Fault',
-        time: DISK_ACCESS_TIME,
-        timestamp: currentTime
-      }]);
-      
-      // aguardar o tempo de acesso ao disco
-      await new Promise(resolve => setTimeout(resolve, DISK_ACCESS_TIME * 100));
+      setTimeMetrics((prev) => [
+        ...prev,
+        { pageId, operation: 'Page Fault', time: DISK_ACCESS_TIME, timestamp: currentTime },
+      ]);
+
+      // Simulate disk access delay
+      await new Promise((resolve) => setTimeout(resolve, DISK_ACCESS_TIME * 100));
+
+      // Update last access time
+      updateLastAccessTime(pageId);
+
+      // Allocate the page
+      onPageAllocation(processId, pageId);
     }
-    
-    onPageAllocation(processId, pageId);
   };
 
   return (
     <div className="space-y-6 p-4 border rounded-lg bg-white">
       <div className="grid grid-cols-2 gap-4">
-        {/* Status da RAM */}
+        {/* RAM Status */}
         <div className="p-4 bg-blue-50 rounded-lg">
           <h4 className="font-bold mb-2">RAM Status</h4>
           <div className="flex justify-between text-sm mb-2">
@@ -65,14 +115,14 @@ const VirtualMemoryManager = ({
             <span>Disponível: {totalRAM - ramUsage}KB</span>
           </div>
           <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-blue-500 transition-all"
               style={{ width: `${(ramUsage / totalRAM) * 100}%` }}
             />
           </div>
         </div>
 
-        {/* Status do Disco */}
+        {/* Disk Status */}
         <div className="p-4 bg-green-50 rounded-lg">
           <h4 className="font-bold mb-2">Disco Status</h4>
           <div className="flex justify-between text-sm mb-2">
@@ -80,7 +130,7 @@ const VirtualMemoryManager = ({
             <span>Disponível: {DISK_SIZE - diskUsage}KB</span>
           </div>
           <div className="w-full h-4 bg-gray-200 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-green-500 transition-all"
               style={{ width: `${(diskUsage / DISK_SIZE) * 100}%` }}
             />
@@ -88,7 +138,7 @@ const VirtualMemoryManager = ({
         </div>
       </div>
 
-      {/* Gráfico de uso */}
+      {/* Usage Graph */}
       <div className="h-64">
         <LineChart width={600} height={240} data={usageHistory}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -101,7 +151,7 @@ const VirtualMemoryManager = ({
         </LineChart>
       </div>
 
-      {/* Grade de Páginas */}
+      {/* Page Grid */}
       <div className="grid grid-cols-5 gap-2">
         {process.pages.map((page) => (
           <button
@@ -109,8 +159,8 @@ const VirtualMemoryManager = ({
             onClick={() => handlePageSwap(process.codigo, page.id)}
             className={`
               p-3 rounded-md text-center transition-all
-              ${page.inMemory 
-                ? 'bg-blue-500 text-white hover:bg-blue-600' 
+              ${page.inMemory
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
                 : 'bg-green-500 text-white hover:bg-green-600'}
             `}
           >
@@ -123,7 +173,7 @@ const VirtualMemoryManager = ({
         ))}
       </div>
 
-      {/* Métricas de Tempo */}
+      {/* Time Metrics */}
       <div className="mt-4">
         <h4 className="font-bold mb-2">Histórico de Page Faults</h4>
         <div className="max-h-32 overflow-y-auto">
