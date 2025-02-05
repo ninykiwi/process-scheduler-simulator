@@ -54,7 +54,8 @@ export default function Home() {
   const [disk, setDisk] = useState<MemoryPage[]>([]); 
   const [ram, setRam] = useState<MemoryPage[]>(Array(TOTAL_SLOTS).fill({ id: -1, processId: -1 })); 
   const [showSchedulerChart, setShowSchedulerChart] = useState(false); 
-  const [currentProcess, setCurrentProcess] = useState<Processo | null>(null); // Estado para o processo atual em execução
+  const [currentProcess, setCurrentProcess] = useState<Processo | null>(null); 
+  const [ultimoProcessoRR, setUltimoProcessoRR] = useState<Processo | null>(null);
 
   const valorQuantumNumber = Number(quantum);
   const valorSobrecargaNumber = Number(sobrecarga);
@@ -113,55 +114,80 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (!isSchedulerRunning) return;
+  if (!isSchedulerRunning) return;
 
-    const interval = setInterval(() => {
-      setRam((prevRam) => {
-        const freeSlots = prevRam.filter((slot) => slot.id === -1).length;
+  const interval = setInterval(() => {
+    setRam((prevRam) => {
+      const freeSlots = prevRam.filter((slot) => slot.id === -1).length;
 
-        if (!currentProcess) {
-          let nextProcess: Processo | undefined;
+      if (!currentProcess) {
+        let nextProcess: Processo | undefined;
 
-          if (selecionarEscalonamento === 'FIFO') {
-            nextProcess = processosEscalonador.find((processo) => {
+        if (selecionarEscalonamento === 'FIFO') {
+          nextProcess = processosEscalonador.find((processo) => {
+            const paginasDoProcesso = disk.filter((page) => page.processId === processo.codigo);
+            return paginasDoProcesso.length > 0 && paginasDoProcesso.length <= freeSlots;
+          });
+        } else if (selecionarEscalonamento === 'SJF') {
+          nextProcess = processosEscalonador
+            .filter((processo) => {
               const paginasDoProcesso = disk.filter((page) => page.processId === processo.codigo);
               return paginasDoProcesso.length > 0 && paginasDoProcesso.length <= freeSlots;
-            });
-          } else if (selecionarEscalonamento === 'SJF') {
-            nextProcess = processosEscalonador
-              .filter((processo) => {
-                const paginasDoProcesso = disk.filter((page) => page.processId === processo.codigo);
-                return paginasDoProcesso.length > 0 && paginasDoProcesso.length <= freeSlots;
-              })
-              .sort((a, b) => a.duracao - b.duracao)[0];
-          }
+            })
+            .sort((a, b) => a.duracao - b.duracao)[0];
+        } else if (selecionarEscalonamento === 'RR') {
+          let filaRR = processosEscalonador.filter((processo) => {
+            const paginasDoProcesso = disk.filter((page) => page.processId === processo.codigo);
+            return paginasDoProcesso.length > 0 && paginasDoProcesso.length <= freeSlots;
+          });
 
-          if (nextProcess) {
-            setCurrentProcess(nextProcess);
+          if (filaRR.length > 0) {
+            let proximoProcesso: Processo;
 
-            const paginasParaMover = disk.filter((page) => page.processId === nextProcess!.codigo);
-
-            const newRam = [...prevRam];
-            let slotIndex = 0;
-            for (const page of paginasParaMover) {
-              const freeSlotIndex = newRam.findIndex((slot) => slot.id === -1);
-              if (freeSlotIndex !== -1) {
-                newRam[freeSlotIndex] = page;
-              }
+            if (!ultimoProcessoRR || !filaRR.some((p) => p.codigo === ultimoProcessoRR.codigo)) {
+              proximoProcesso = filaRR[0];
+            } else {
+              const indexAtual = filaRR.findIndex((p) => p.codigo === ultimoProcessoRR.codigo);
+              proximoProcesso = filaRR[(indexAtual + 1) % filaRR.length]; 
             }
 
-            setDisk((prevDisk) => prevDisk.filter((page) => page.processId !== nextProcess!.codigo));
-
-            return newRam;
+            setUltimoProcessoRR(proximoProcesso);
+            nextProcess = proximoProcesso;
           }
+        } else if (selecionarEscalonamento === 'EDF') {
+          nextProcess = processosEscalonador
+              .filter((processo) => {
+                  const paginasDoProcesso = disk.filter((page) => page.processId === processo.codigo);
+                  return paginasDoProcesso.length > 0 && paginasDoProcesso.length <= freeSlots;
+              })
+              .sort((a, b) => a.deadline - b.deadline)[0];
+      }
+
+        if (nextProcess) {
+          setCurrentProcess(nextProcess);
+
+          const paginasParaMover = disk.filter((page) => page.processId === nextProcess!.codigo);
+          const newRam = [...prevRam];
+
+          for (const page of paginasParaMover) {
+            const freeSlotIndex = newRam.findIndex((slot) => slot.id === -1);
+            if (freeSlotIndex !== -1) {
+              newRam[freeSlotIndex] = page;
+            }
+          }
+
+          setDisk((prevDisk) => prevDisk.filter((page) => page.processId !== nextProcess!.codigo));
+          return newRam;
         }
+      }
 
-        return prevRam;
-      });
-    }, 500); 
+      return prevRam;
+    });
+  }, 500);
 
-    return () => clearInterval(interval);
-  }, [isSchedulerRunning, disk, processosEscalonador, currentProcess, selecionarEscalonamento]);
+  return () => clearInterval(interval);
+}, [isSchedulerRunning, disk, processosEscalonador, currentProcess, selecionarEscalonamento, ultimoProcessoRR]);
+
 
   useEffect(() => {
     if (currentProcess) {
