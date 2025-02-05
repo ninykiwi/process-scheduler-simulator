@@ -54,7 +54,7 @@ export default function Home() {
   const [disk, setDisk] = useState<MemoryPage[]>([]); 
   const [ram, setRam] = useState<MemoryPage[]>(Array(TOTAL_SLOTS).fill({ id: -1, processId: -1 })); 
   const [showSchedulerChart, setShowSchedulerChart] = useState(false); 
-  const [currentProcess, setCurrentProcess] = useState<Processo | null>(null); // Estado para o processo atual em execução
+  const [currentProcess, setCurrentProcess] = useState<Processo | null>(null); 
   const [ultimoProcessoRR, setUltimoProcessoRR] = useState<Processo | null>(null);
 
   const valorQuantumNumber = Number(quantum);
@@ -148,13 +148,20 @@ export default function Home() {
               proximoProcesso = filaRR[0];
             } else {
               const indexAtual = filaRR.findIndex((p) => p.codigo === ultimoProcessoRR.codigo);
-              proximoProcesso = filaRR[(indexAtual + 1) % filaRR.length]; // Próximo da fila (circular)
+              proximoProcesso = filaRR[(indexAtual + 1) % filaRR.length]; 
             }
 
             setUltimoProcessoRR(proximoProcesso);
             nextProcess = proximoProcesso;
           }
-        }
+        } else if (selecionarEscalonamento === 'EDF') {
+          nextProcess = processosEscalonador
+              .filter((processo) => {
+                  const paginasDoProcesso = disk.filter((page) => page.processId === processo.codigo);
+                  return paginasDoProcesso.length > 0 && paginasDoProcesso.length <= freeSlots;
+              })
+              .sort((a, b) => a.deadline - b.deadline)[0];
+      }
 
         if (nextProcess) {
           setCurrentProcess(nextProcess);
